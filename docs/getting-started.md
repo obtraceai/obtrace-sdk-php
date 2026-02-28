@@ -9,7 +9,7 @@ use Obtrace\Sdk\ObtraceConfig;
 
 $cfg = new ObtraceConfig(
     apiKey: "<API_KEY>",
-    ingestBaseUrl: "https://injet.obtrace.ai",
+    ingestBaseUrl: "https://inject.obtrace.ai",
     serviceName: "php-api"
 );
 

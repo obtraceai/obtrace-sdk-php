@@ -10,7 +10,7 @@ use Obtrace\Sdk\ObtraceConfig;
 
 $cfg = new ObtraceConfig(
     apiKey: getenv("OBTRACE_API_KEY") ?: "test-key",
-    ingestBaseUrl: getenv("OBTRACE_INGEST_BASE_URL") ?: "https://injet.obtrace.ai",
+    ingestBaseUrl: getenv("OBTRACE_INGEST_BASE_URL") ?: "https://inject.obtrace.ai",
     serviceName: "php-example",
     env: "dev",
 );
