@@ -1,0 +1,14 @@
+{
+  "name": "obtrace/sdk-php",
+  "description": "Obtrace PHP SDK",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Obtrace\\Sdk\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=8.2"
+  }
+}

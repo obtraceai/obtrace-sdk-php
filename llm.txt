@@ -1,0 +1,20 @@
+Obtrace SDK PHP
+
+Purpose:
+- PHP backend SDK for logs, metrics, spans, propagation, and middleware helper baseline.
+
+Core modules:
+- src/ObtraceClient.php
+- src/Context.php
+- src/Otlp.php
+- src/Framework.php
+
+Framework coverage:
+- Laravel/Symfony middleware helper baseline
+
+Design principle:
+- Thin SDK, no business rule authority.
+- Backend/ingest/control-plane is source of truth for policy and business logic.
+
+Reference contract:
+- specs/sdk/universal-contract-v1.md

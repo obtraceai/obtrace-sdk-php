@@ -1,0 +1,10 @@
+{
+  "mcp_version": "1.0",
+  "name": "obtrace-sdk-php",
+  "description": "MCP context metadata for Obtrace PHP SDK repository",
+  "resources": [
+    { "id": "readme", "path": "README.md", "description": "PHP SDK usage" },
+    { "id": "docs-index", "path": "docs/index.md", "description": "Documentation index" },
+    { "id": "client", "path": "src/ObtraceClient.php", "description": "SDK client implementation" }
+  ]
+}
