@@ -18,3 +18,4 @@ jobs:
       - run: php -l src/Otlp.php
       - run: php -l src/Types.php
       - run: php -l src/Framework.php
+      - run: php tests/context_test.php
