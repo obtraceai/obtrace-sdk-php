@@ -44,9 +44,11 @@ Recommended:
 <?php
 require_once __DIR__ . "/src/ObtraceClient.php";
 require_once __DIR__ . "/src/Types.php";
+require_once __DIR__ . "/src/SemanticMetrics.php";
 
 use Obtrace\Sdk\ObtraceClient;
 use Obtrace\Sdk\ObtraceConfig;
+use Obtrace\Sdk\SemanticMetrics;
 
 $cfg = new ObtraceConfig(
     apiKey: "<API_KEY>",
@@ -56,10 +58,19 @@ $cfg = new ObtraceConfig(
 
 $client = new ObtraceClient($cfg);
 $client->log("info", "started");
-$client->metric("orders.count", 1);
-$client->span("job.process");
+$client->metric(SemanticMetrics::RUNTIME_CPU_UTILIZATION, 0.41);
+$client->span("checkout.charge", attrs: [
+    "feature.name" => "checkout",
+    "payment.provider" => "stripe",
+]);
 $client->flush();
 ```
+
+## Canonical metrics and custom spans
+
+- Use `SemanticMetrics::*` for globally normalized metric names.
+- Custom spans are emitted with `$client->span(..., attrs: [...])`.
+- Keep free-form metric names only for product-specific signals outside the shared catalog.
 
 ## Frameworks
 
