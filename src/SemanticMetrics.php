@@ -28,4 +28,32 @@ final class SemanticMetrics
     public const WEB_VITAL_CLS = "web.vital.cls";
     public const WEB_VITAL_TTFB = "web.vital.ttfb";
     public const USER_ACTIONS = "obtrace.sim.web.react.actions";
+
+    public static function isSemanticMetric(string $name): bool
+    {
+        return in_array($name, [
+            self::THROUGHPUT,
+            self::ERROR_RATE,
+            self::LATENCY_P95,
+            self::RUNTIME_CPU_UTILIZATION,
+            self::RUNTIME_MEMORY_USAGE,
+            self::RUNTIME_THREAD_COUNT,
+            self::RUNTIME_GC_PAUSE,
+            self::RUNTIME_EVENTLOOP_LAG,
+            self::CLUSTER_CPU_UTILIZATION,
+            self::CLUSTER_MEMORY_USAGE,
+            self::CLUSTER_NODE_COUNT,
+            self::CLUSTER_POD_COUNT,
+            self::DB_OPERATION_LATENCY,
+            self::DB_CLIENT_ERRORS,
+            self::DB_CONNECTIONS_USAGE,
+            self::MESSAGING_CONSUMER_LAG,
+            self::WEB_VITAL_LCP,
+            self::WEB_VITAL_FCP,
+            self::WEB_VITAL_INP,
+            self::WEB_VITAL_CLS,
+            self::WEB_VITAL_TTFB,
+            self::USER_ACTIONS,
+        ], true);
+    }
 }

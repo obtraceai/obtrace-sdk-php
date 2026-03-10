@@ -18,6 +18,7 @@ final class ObtraceConfig
         public int $maxQueueSize = 1000,
         public float $requestTimeoutSec = 5.0,
         public array $defaultHeaders = [],
+        public bool $validateSemanticMetrics = false,
         public bool $debug = false,
     ) {
     }

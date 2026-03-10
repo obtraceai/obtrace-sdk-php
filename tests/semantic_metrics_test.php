@@ -20,3 +20,13 @@ if (SemanticMetrics::WEB_VITAL_INP !== "web.vital.inp") {
     fwrite(STDERR, "web vital mismatch\n");
     exit(1);
 }
+
+if (!SemanticMetrics::isSemanticMetric(SemanticMetrics::WEB_VITAL_INP)) {
+    fwrite(STDERR, "semantic metric should be recognized\n");
+    exit(1);
+}
+
+if (SemanticMetrics::isSemanticMetric("orders.count")) {
+    fwrite(STDERR, "custom metric should not be recognized as semantic\n");
+    exit(1);
+}

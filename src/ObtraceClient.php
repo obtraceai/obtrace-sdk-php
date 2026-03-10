@@ -27,6 +27,9 @@ final class ObtraceClient
 
     public function metric(string $name, float $value, string $unit = "1", array $context = []): void
     {
+        if ($this->cfg->validateSemanticMetrics && $this->cfg->debug && !SemanticMetrics::isSemanticMetric($name)) {
+            fwrite(STDERR, sprintf("[obtrace-sdk-php] non-canonical metric name: %s\n", $name));
+        }
         $this->enqueue("/otlp/v1/metrics", Otlp::metricPayload($this->cfg, $name, $value, $unit, $context));
     }
 
