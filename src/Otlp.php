@@ -91,7 +91,7 @@ final class Otlp
         $base = [
             "service.name" => $cfg->serviceName,
             "service.version" => $cfg->serviceVersion,
-            "deployment.environment" => $cfg->env ?: "dev",
+            "deployment.environment" => $cfg->env ?: "",
             "runtime.name" => "php",
         ];
         if ($cfg->tenantId !== null) {

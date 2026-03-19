@@ -31,7 +31,7 @@ Required:
 - `ingestBaseUrl`
 - `serviceName`
 
-Recommended:
+Optional (auto-resolved from API key on the server side):
 - `tenantId`
 - `projectId`
 - `appId`
@@ -39,6 +39,28 @@ Recommended:
 - `serviceVersion`
 
 ## Quickstart
+
+### Simplified setup
+
+The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only three fields are needed:
+
+```php
+<?php
+use Obtrace\Sdk\ObtraceClient;
+use Obtrace\Sdk\ObtraceConfig;
+
+$cfg = new ObtraceConfig(
+    apiKey: "obt_live_...",
+    ingestBaseUrl: "https://ingest.obtrace.io",
+    serviceName: "my-service"
+);
+
+$client = new ObtraceClient($cfg);
+```
+
+### Full configuration
+
+For advanced use cases you can override the resolved values explicitly:
 
 ```php
 <?php

@@ -13,7 +13,7 @@ final class ObtraceConfig
         public ?string $tenantId = null,
         public ?string $projectId = null,
         public ?string $appId = null,
-        public string $env = "dev",
+        public ?string $env = null,
         public string $serviceVersion = "1.0.0",
         public int $maxQueueSize = 1000,
         public float $requestTimeoutSec = 5.0,
