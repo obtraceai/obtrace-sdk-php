@@ -12,17 +12,28 @@ require_once __DIR__ . "/SemanticMetrics.php";
 final class ObtraceClient
 {
     private array $queue = [];
+    private int $circuitFailures = 0;
+    private float $circuitOpenUntil = 0;
 
     public function __construct(private readonly ObtraceConfig $cfg)
     {
         if ($cfg->apiKey === "" || $cfg->ingestBaseUrl === "" || $cfg->serviceName === "") {
             throw new \InvalidArgumentException("apiKey, ingestBaseUrl and serviceName are required");
         }
+        register_shutdown_function([$this, 'shutdown']);
+    }
+
+    private function truncate(string $s, int $max): string
+    {
+        if (strlen($s) <= $max) {
+            return $s;
+        }
+        return substr($s, 0, $max) . "...[truncated]";
     }
 
     public function log(string $level, string $message, array $context = []): void
     {
-        $this->enqueue("/otlp/v1/logs", Otlp::logsPayload($this->cfg, $level, $message, $context));
+        $this->enqueue("/otlp/v1/logs", Otlp::logsPayload($this->cfg, $level, $this->truncate($message, 32768), $context));
     }
 
     public function metric(string $name, float $value, string $unit = "1", array $context = []): void
@@ -30,7 +41,7 @@ final class ObtraceClient
         if ($this->cfg->validateSemanticMetrics && $this->cfg->debug && !SemanticMetrics::isSemanticMetric($name)) {
             fwrite(STDERR, sprintf("[obtrace-sdk-php] non-canonical metric name: %s\n", $name));
         }
-        $this->enqueue("/otlp/v1/metrics", Otlp::metricPayload($this->cfg, $name, $value, $unit, $context));
+        $this->enqueue("/otlp/v1/metrics", Otlp::metricPayload($this->cfg, $this->truncate($name, 1024), $value, $unit, $context));
     }
 
     public function span(
@@ -47,6 +58,12 @@ final class ObtraceClient
         $span = ($spanId !== null && strlen($spanId) === 16) ? $spanId : Context::randomHex(8);
         $start = $startUnixNano ?? Otlp::nowUnixNano();
         $end = $endUnixNano ?? Otlp::nowUnixNano();
+        $name = $this->truncate($name, 32768);
+        foreach ($attrs as $k => $v) {
+            if (is_string($v)) {
+                $attrs[$k] = $this->truncate($v, 4096);
+            }
+        }
         $this->enqueue("/otlp/v1/traces", Otlp::spanPayload($this->cfg, $name, $trace, $span, $start, $end, $statusCode, $statusMessage, $attrs));
         return ["trace_id" => $trace, "span_id" => $span];
     }
@@ -58,10 +75,40 @@ final class ObtraceClient
 
     public function flush(): void
     {
-        $batch = $this->queue;
-        $this->queue = [];
+        $now = microtime(true);
+        if ($now < $this->circuitOpenUntil) {
+            return;
+        }
+        $halfOpen = $this->circuitFailures >= 5;
+        if ($halfOpen) {
+            if (count($this->queue) === 0) {
+                return;
+            }
+            $batch = [array_shift($this->queue)];
+        } else {
+            $batch = $this->queue;
+            $this->queue = [];
+        }
         foreach ($batch as $item) {
-            $this->send($item["endpoint"], $item["payload"]);
+            $success = $this->send($item["endpoint"], $item["payload"]);
+            if ($success) {
+                if ($this->circuitFailures > 0) {
+                    if ($this->cfg->debug) {
+                        fwrite(STDERR, "[obtrace-sdk-php] circuit breaker closed\n");
+                    }
+                    $this->circuitFailures = 0;
+                    $this->circuitOpenUntil = 0;
+                }
+            } else {
+                $this->circuitFailures++;
+                if ($this->circuitFailures >= 5) {
+                    $this->circuitOpenUntil = microtime(true) + 30.0;
+                    if ($this->cfg->debug) {
+                        fwrite(STDERR, "[obtrace-sdk-php] circuit breaker opened\n");
+                    }
+                    break;
+                }
+            }
         }
     }
 
@@ -73,21 +120,32 @@ final class ObtraceClient
     private function enqueue(string $endpoint, array $payload): void
     {
         if (count($this->queue) >= $this->cfg->maxQueueSize) {
+            if ($this->cfg->debug) {
+                fwrite(STDERR, sprintf("[obtrace-sdk-php] queue full (%d), dropping oldest item\n", $this->cfg->maxQueueSize));
+            }
             array_shift($this->queue);
         }
         $this->queue[] = ["endpoint" => $endpoint, "payload" => $payload];
     }
 
-    private function send(string $endpoint, array $payload): void
+    private function send(string $endpoint, array $payload): bool
     {
         if (!function_exists("curl_init")) {
-            return;
+            return false;
+        }
+
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            if ($this->cfg->debug) {
+                fwrite(STDERR, sprintf("[obtrace-sdk-php] json_encode failed endpoint=%s err=%s\n", $endpoint, json_last_error_msg()));
+            }
+            return false;
         }
 
         $url = rtrim($this->cfg->ingestBaseUrl, "/") . $endpoint;
         $ch = curl_init($url);
         if ($ch === false) {
-            return;
+            return false;
         }
 
         $headers = array_merge(
@@ -102,24 +160,41 @@ final class ObtraceClient
             ),
         );
 
+        $timeoutMs = (int) floor($this->cfg->requestTimeoutSec * 1000);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
+            CURLOPT_POSTFIELDS => $json,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT_MS => (int) floor($this->cfg->requestTimeoutSec * 1000),
+            CURLOPT_TIMEOUT_MS => $timeoutMs,
+            CURLOPT_CONNECTTIMEOUT_MS => (int) floor($timeoutMs / 2),
         ]);
 
         $body = curl_exec($ch);
+        if ($body === false) {
+            if ($this->cfg->debug) {
+                fwrite(STDERR, sprintf("[obtrace-sdk-php] curl_exec failed endpoint=%s err=%s, retrying\n", $endpoint, curl_error($ch)));
+            }
+            usleep(500000);
+            $body = curl_exec($ch);
+            if ($body === false) {
+                if ($this->cfg->debug) {
+                    fwrite(STDERR, sprintf("[obtrace-sdk-php] curl_exec retry failed endpoint=%s err=%s\n", $endpoint, curl_error($ch)));
+                }
+                curl_close($ch);
+                return false;
+            }
+        }
+
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err = curl_error($ch);
         curl_close($ch);
 
-        if ($this->cfg->debug && $code >= 300) {
-            fwrite(STDERR, sprintf("[obtrace-sdk-php] status=%d endpoint=%s body=%s\n", $code, $endpoint, (string) $body));
+        if ($code >= 300) {
+            if ($this->cfg->debug) {
+                fwrite(STDERR, sprintf("[obtrace-sdk-php] status=%d endpoint=%s body=%s\n", $code, $endpoint, (string) $body));
+            }
+            return false;
         }
-        if ($this->cfg->debug && $err !== "") {
-            fwrite(STDERR, sprintf("[obtrace-sdk-php] send failed endpoint=%s err=%s\n", $endpoint, $err));
-        }
+        return true;
     }
 }

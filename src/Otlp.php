@@ -111,6 +111,9 @@ final class Otlp
 
     private static function attrs(array $attrs): array
     {
+        if (count($attrs) > 128) {
+            $attrs = array_slice($attrs, 0, 128, true);
+        }
         $out = [];
         foreach ($attrs as $k => $v) {
             if (is_bool($v)) {
@@ -118,7 +121,11 @@ final class Otlp
             } elseif (is_int($v) || is_float($v)) {
                 $value = ["doubleValue" => (float) $v];
             } else {
-                $value = ["stringValue" => (string) $v];
+                $sv = (string) $v;
+                if (strlen($sv) > 4096) {
+                    $sv = substr($sv, 0, 4096);
+                }
+                $value = ["stringValue" => $sv];
             }
             $out[] = ["key" => (string) $k, "value" => $value];
         }
