@@ -16,3 +16,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$GITHUB_REF_NAME" --generate-notes
+      - name: Notify Packagist
+        run: |
+          curl -s -X POST "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_API_TOKEN }}" \
+            -d '{"repository":{"url":"https://github.com/obtraceai/obtrace-sdk-php"}}'
