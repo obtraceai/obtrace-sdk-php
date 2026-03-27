@@ -14,6 +14,17 @@ final class ObtraceClient
     private array $queue = [];
     private int $circuitFailures = 0;
     private float $circuitOpenUntil = 0;
+    private mixed $previousErrorHandler = null;
+    private ?callable $previousExceptionHandler = null;
+
+    private const ERROR_LEVEL_MAP = [
+        E_NOTICE => "info",
+        E_USER_NOTICE => "info",
+        E_WARNING => "warn",
+        E_USER_WARNING => "warn",
+        E_ERROR => "error",
+        E_USER_ERROR => "error",
+    ];
 
     public function __construct(private readonly ObtraceConfig $cfg)
     {
@@ -21,6 +32,34 @@ final class ObtraceClient
             throw new \InvalidArgumentException("apiKey, ingestBaseUrl and serviceName are required");
         }
         register_shutdown_function([$this, 'shutdown']);
+        $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
+        $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
+    }
+
+    public function handleError(int $errno, string $errstr, string $errfile = "", int $errline = 0): bool
+    {
+        $level = self::ERROR_LEVEL_MAP[$errno] ?? "error";
+        $this->log($level, $errstr, ["file" => $errfile, "line" => $errline, "errno" => $errno]);
+
+        if ($this->previousErrorHandler !== null) {
+            return ($this->previousErrorHandler)($errno, $errstr, $errfile, $errline);
+        }
+        return false;
+    }
+
+    public function handleException(\Throwable $exception): void
+    {
+        $this->log("fatal", $exception->getMessage(), [
+            "file" => $exception->getFile(),
+            "line" => $exception->getLine(),
+            "exception" => get_class($exception),
+            "trace" => $exception->getTraceAsString(),
+        ]);
+        $this->flush();
+
+        if ($this->previousExceptionHandler !== null) {
+            ($this->previousExceptionHandler)($exception);
+        }
     }
 
     private function truncate(string $s, int $max): string
