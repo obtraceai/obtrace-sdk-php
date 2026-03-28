@@ -10,6 +10,7 @@ use OpenTelemetry\API\Trace\StatusCode;
 
 final class ObtraceClient
 {
+    private static bool $initialized = false;
     private OtelSetup $otel;
     private mixed $previousErrorHandler = null;
     private mixed $previousExceptionHandler = null;
@@ -42,9 +43,14 @@ final class ObtraceClient
 
     public function __construct(private readonly ObtraceConfig $cfg)
     {
+        if (self::$initialized) {
+            fwrite(STDERR, "[obtrace-sdk-php] already initialized, skipping duplicate init\n");
+            return;
+        }
         if ($cfg->apiKey === '' || $cfg->ingestBaseUrl === '' || $cfg->serviceName === '') {
             throw new \InvalidArgumentException('apiKey, ingestBaseUrl and serviceName are required');
         }
+        self::$initialized = true;
         $this->otel = new OtelSetup($cfg);
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
@@ -75,7 +81,15 @@ final class ObtraceClient
         if (str_starts_with($package, 'ext-')) {
             return extension_loaded(substr($package, 4));
         }
-        $installed = __DIR__ . '/../vendor/composer/installed.json';
+        $installed = __DIR__ . '/../../vendor/composer/installed.json';
+        if (!file_exists($installed)) {
+            try {
+                $vendorDir = dirname((new \ReflectionClass(\Composer\Autoload\ClassLoader::class))->getFileName(), 2);
+                $installed = $vendorDir . '/composer/installed.json';
+            } catch (\ReflectionException) {
+                return false;
+            }
+        }
         if (!file_exists($installed)) {
             return false;
         }
