@@ -46,14 +46,18 @@ final class ObtraceClient
             throw new \InvalidArgumentException('apiKey, ingestBaseUrl and serviceName are required');
         }
         $this->otel = new OtelSetup($cfg);
-        $this->detectMissingInstrumentation();
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
         $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
     }
 
-    private function detectMissingInstrumentation(): void
+    public function detectMissingInstrumentation(): void
     {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
         foreach (self::AUTO_INSTRUMENTATION_MAP as $library => $instrumentation) {
             if ($this->isPackageInstalled($library) && !$this->isPackageInstalled($instrumentation)) {
                 fwrite(STDERR, sprintf(
