@@ -8,6 +8,7 @@ require_once __DIR__ . "/Types.php";
 require_once __DIR__ . "/Context.php";
 require_once __DIR__ . "/Otlp.php";
 require_once __DIR__ . "/SemanticMetrics.php";
+require_once __DIR__ . "/HttpInstrumentation.php";
 
 final class ObtraceClient
 {
@@ -15,7 +16,7 @@ final class ObtraceClient
     private int $circuitFailures = 0;
     private float $circuitOpenUntil = 0;
     private mixed $previousErrorHandler = null;
-    private ?callable $previousExceptionHandler = null;
+    private mixed $previousExceptionHandler = null;
 
     private const ERROR_LEVEL_MAP = [
         E_NOTICE => "info",
@@ -34,6 +35,9 @@ final class ObtraceClient
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
         $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
+        if ($cfg->autoInstrumentHttp) {
+            HttpInstrumentation::register($this);
+        }
     }
 
     public function handleError(int $errno, string $errstr, string $errfile = "", int $errline = 0): bool

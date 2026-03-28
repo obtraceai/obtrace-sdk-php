@@ -20,6 +20,7 @@ final class ObtraceConfig
         public array $defaultHeaders = [],
         public bool $validateSemanticMetrics = false,
         public bool $debug = false,
+        public bool $autoInstrumentHttp = true,
     ) {
     }
 }

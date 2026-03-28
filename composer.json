@@ -5,10 +5,32 @@
   "license": "MIT",
   "autoload": {
     "psr-4": {
-      "Obtrace\\Sdk\\": "src/"
+      "Obtrace\\Sdk\\": "src/",
+      "Obtrace\\Sdk\\Laravel\\": "src/Laravel/"
+    },
+    "classmap": [
+      "src/"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Obtrace\\Sdk\\Tests\\": "tests/"
     }
   },
   "require": {
     "php": ">=8.2"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0"
+  },
+  "scripts": {
+    "test": "phpunit --testdox"
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Obtrace\\Sdk\\Laravel\\ObtraceServiceProvider"
+      ]
+    }
   }
 }
