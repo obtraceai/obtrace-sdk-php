@@ -16,7 +16,6 @@ final class ObtraceClientTest extends TestCase
             apiKey: $overrides['apiKey'] ?? 'test-key',
             ingestBaseUrl: $overrides['ingestBaseUrl'] ?? 'https://ingest.test',
             serviceName: $overrides['serviceName'] ?? 'test-svc',
-            autoInstrumentHttp: $overrides['autoInstrumentHttp'] ?? false,
         );
     }
 
@@ -54,16 +53,6 @@ final class ObtraceClientTest extends TestCase
         $this->assertSame(16, strlen($result["span_id"]));
     }
 
-    public function testSpanUsesProvidedIds(): void
-    {
-        $client = new ObtraceClient($this->makeConfig());
-        $traceId = "0123456789abcdef0123456789abcdef";
-        $spanId = "fedcba9876543210";
-        $result = $client->span("test.span", traceId: $traceId, spanId: $spanId);
-        $this->assertSame($traceId, $result["trace_id"]);
-        $this->assertSame($spanId, $result["span_id"]);
-    }
-
     public function testLogDoesNotThrow(): void
     {
         $client = new ObtraceClient($this->makeConfig());
@@ -78,31 +67,10 @@ final class ObtraceClientTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function testAutoInstrumentHttpDefaultTrue(): void
-    {
-        $cfg = new ObtraceConfig(
-            apiKey: 'key',
-            ingestBaseUrl: 'https://ingest.test',
-            serviceName: 'svc',
-        );
-        $this->assertTrue($cfg->autoInstrumentHttp);
-    }
-
-    public function testAutoInstrumentHttpCanBeDisabled(): void
-    {
-        $cfg = new ObtraceConfig(
-            apiKey: 'key',
-            ingestBaseUrl: 'https://ingest.test',
-            serviceName: 'svc',
-            autoInstrumentHttp: false,
-        );
-        $this->assertFalse($cfg->autoInstrumentHttp);
-    }
-
     public function testHandleErrorChainsToAPreviousHandler(): void
     {
         $called = false;
-        $prev = set_error_handler(function () use (&$called) {
+        set_error_handler(function () use (&$called) {
             $called = true;
             return true;
         });

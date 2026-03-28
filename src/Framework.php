@@ -6,9 +6,6 @@ namespace Obtrace\Sdk;
 
 final class Framework
 {
-    /**
-     * Generic wrapper that can be used in middleware-style stacks.
-     */
     public static function middleware(ObtraceClient $client, callable $next): callable
     {
         return static function (...$args) use ($client, $next) {

@@ -23,12 +23,9 @@ class ObtraceServiceProvider extends ServiceProvider
                 appId: $config['app_id'] ?? null,
                 env: $config['env'] ?? $app->environment(),
                 serviceVersion: $config['service_version'] ?? '1.0.0',
-                maxQueueSize: $config['max_queue_size'] ?? 1000,
-                requestTimeoutSec: $config['request_timeout_sec'] ?? 5.0,
                 defaultHeaders: $config['default_headers'] ?? [],
                 validateSemanticMetrics: $config['validate_semantic_metrics'] ?? false,
                 debug: $config['debug'] ?? false,
-                autoInstrumentHttp: $config['auto_instrument_http'] ?? true,
             ));
         });
     }

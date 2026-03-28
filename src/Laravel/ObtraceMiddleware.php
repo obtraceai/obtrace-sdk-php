@@ -6,9 +6,9 @@ namespace Obtrace\Sdk\Laravel;
 
 use Closure;
 use Illuminate\Http\Request;
-use Obtrace\Sdk\Context;
 use Obtrace\Sdk\ObtraceClient;
-use Obtrace\Sdk\Otlp;
+use OpenTelemetry\API\Trace\SpanKind;
+use OpenTelemetry\API\Trace\StatusCode;
 use Symfony\Component\HttpFoundation\Response;
 
 class ObtraceMiddleware
@@ -19,39 +19,49 @@ class ObtraceMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        $traceId = Context::randomHex(16);
-        $spanId = Context::randomHex(8);
-        $startNano = Otlp::nowUnixNano();
-
-        $response = $next($request);
-
-        $endNano = Otlp::nowUnixNano();
-        $statusCode = $response->getStatusCode();
+        $tracer = $this->client->getTracerProvider()->getTracer('obtrace-sdk-php', '1.0.0');
         $method = $request->getMethod();
         $path = $request->getPathInfo();
-        $host = $request->getHost();
         $route = $request->route()?->uri() ?? $path;
 
-        $this->client->span(
-            name: "{$method} {$route}",
-            traceId: $traceId,
-            spanId: $spanId,
-            startUnixNano: $startNano,
-            endUnixNano: $endNano,
-            statusCode: $statusCode,
-            attrs: [
+        $span = $tracer->spanBuilder("{$method} {$route}")
+            ->setSpanKind(SpanKind::KIND_SERVER)
+            ->setAttributes([
                 'http.method' => $method,
                 'http.route' => $route,
                 'http.target' => $path,
-                'http.host' => $host,
-                'http.status_code' => $statusCode,
+                'http.host' => $request->getHost(),
                 'http.user_agent' => $request->userAgent() ?? '',
-                'http.request_content_length' => $request->header('Content-Length', '0'),
-                'http.response_content_length' => $response->headers->get('Content-Length', '0'),
-            ],
-        );
+            ])
+            ->startSpan();
 
-        $response->headers->set('X-Trace-Id', $traceId);
+        $scope = $span->activate();
+
+        try {
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            $span->setStatus(StatusCode::STATUS_ERROR, $e->getMessage());
+            $span->recordException($e);
+            $span->end();
+            $scope->detach();
+            throw $e;
+        }
+
+        $statusCode = $response->getStatusCode();
+        $span->setAttribute('http.status_code', $statusCode);
+        $span->setAttribute('http.request_content_length', $request->header('Content-Length', '0'));
+        $span->setAttribute('http.response_content_length', $response->headers->get('Content-Length', '0'));
+
+        if ($statusCode >= 400) {
+            $span->setStatus(StatusCode::STATUS_ERROR);
+        } else {
+            $span->setStatus(StatusCode::STATUS_OK);
+        }
+
+        $span->end();
+        $scope->detach();
+
+        $response->headers->set('X-Trace-Id', $span->getContext()->getTraceId());
 
         return $response;
     }

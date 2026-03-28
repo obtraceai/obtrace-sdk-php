@@ -4,46 +4,49 @@ declare(strict_types=1);
 
 namespace Obtrace\Sdk;
 
-require_once __DIR__ . "/Types.php";
-require_once __DIR__ . "/Context.php";
-require_once __DIR__ . "/Otlp.php";
-require_once __DIR__ . "/SemanticMetrics.php";
-require_once __DIR__ . "/HttpInstrumentation.php";
+use OpenTelemetry\API\Logs\LogRecord;
+use OpenTelemetry\API\Trace\SpanKind;
+use OpenTelemetry\API\Trace\StatusCode;
 
 final class ObtraceClient
 {
-    private array $queue = [];
-    private int $circuitFailures = 0;
-    private float $circuitOpenUntil = 0;
+    private OtelSetup $otel;
     private mixed $previousErrorHandler = null;
     private mixed $previousExceptionHandler = null;
 
     private const ERROR_LEVEL_MAP = [
-        E_NOTICE => "info",
-        E_USER_NOTICE => "info",
-        E_WARNING => "warn",
-        E_USER_WARNING => "warn",
-        E_ERROR => "error",
-        E_USER_ERROR => "error",
+        E_NOTICE => 'info',
+        E_USER_NOTICE => 'info',
+        E_WARNING => 'warn',
+        E_USER_WARNING => 'warn',
+        E_ERROR => 'error',
+        E_USER_ERROR => 'error',
+    ];
+
+    private const SEVERITY_MAP = [
+        'trace' => 1,
+        'debug' => 5,
+        'info' => 9,
+        'warn' => 13,
+        'error' => 17,
+        'fatal' => 21,
     ];
 
     public function __construct(private readonly ObtraceConfig $cfg)
     {
-        if ($cfg->apiKey === "" || $cfg->ingestBaseUrl === "" || $cfg->serviceName === "") {
-            throw new \InvalidArgumentException("apiKey, ingestBaseUrl and serviceName are required");
+        if ($cfg->apiKey === '' || $cfg->ingestBaseUrl === '' || $cfg->serviceName === '') {
+            throw new \InvalidArgumentException('apiKey, ingestBaseUrl and serviceName are required');
         }
+        $this->otel = new OtelSetup($cfg);
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
         $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
-        if ($cfg->autoInstrumentHttp) {
-            HttpInstrumentation::register($this);
-        }
     }
 
-    public function handleError(int $errno, string $errstr, string $errfile = "", int $errline = 0): bool
+    public function handleError(int $errno, string $errstr, string $errfile = '', int $errline = 0): bool
     {
-        $level = self::ERROR_LEVEL_MAP[$errno] ?? "error";
-        $this->log($level, $errstr, ["file" => $errfile, "line" => $errline, "errno" => $errno]);
+        $level = self::ERROR_LEVEL_MAP[$errno] ?? 'error';
+        $this->log($level, $errstr, ['file' => $errfile, 'line' => $errline, 'errno' => $errno]);
 
         if ($this->previousErrorHandler !== null) {
             return ($this->previousErrorHandler)($errno, $errstr, $errfile, $errline);
@@ -53,191 +56,78 @@ final class ObtraceClient
 
     public function handleException(\Throwable $exception): void
     {
-        $this->log("fatal", $exception->getMessage(), [
-            "file" => $exception->getFile(),
-            "line" => $exception->getLine(),
-            "exception" => get_class($exception),
-            "trace" => $exception->getTraceAsString(),
+        $this->log('fatal', $exception->getMessage(), [
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'exception' => get_class($exception),
+            'trace' => $exception->getTraceAsString(),
         ]);
-        $this->flush();
 
         if ($this->previousExceptionHandler !== null) {
             ($this->previousExceptionHandler)($exception);
         }
     }
 
-    private function truncate(string $s, int $max): string
-    {
-        if (strlen($s) <= $max) {
-            return $s;
-        }
-        return substr($s, 0, $max) . "...[truncated]";
-    }
-
     public function log(string $level, string $message, array $context = []): void
     {
-        $this->enqueue("/otlp/v1/logs", Otlp::logsPayload($this->cfg, $level, $this->truncate($message, 32768), $context));
+        $logger = $this->otel->getLoggerProvider()->getLogger('obtrace-sdk-php', '1.0.0');
+        $record = (new LogRecord($message))
+            ->setSeverityText(strtoupper($level))
+            ->setSeverityNumber(self::SEVERITY_MAP[$level] ?? 9)
+            ->setAttributes(array_merge(['obtrace.log.level' => $level], $context));
+        $logger->emit($record);
     }
 
-    public function metric(string $name, float $value, string $unit = "1", array $context = []): void
+    public function metric(string $name, float $value, string $unit = '1', array $context = []): void
     {
         if ($this->cfg->validateSemanticMetrics && $this->cfg->debug && !SemanticMetrics::isSemanticMetric($name)) {
             fwrite(STDERR, sprintf("[obtrace-sdk-php] non-canonical metric name: %s\n", $name));
         }
-        $this->enqueue("/otlp/v1/metrics", Otlp::metricPayload($this->cfg, $this->truncate($name, 1024), $value, $unit, $context));
+        $meter = $this->otel->getMeterProvider()->getMeter('obtrace-sdk-php', '1.0.0');
+        $gauge = $meter->createObservableGauge($name, $unit);
+        $gauge->observe(static function ($observer) use ($value, $context) {
+            $observer->observe($value, $context);
+        });
+        $this->otel->getMeterProvider()->collect();
     }
 
     public function span(
         string $name,
-        ?string $traceId = null,
-        ?string $spanId = null,
-        ?string $startUnixNano = null,
-        ?string $endUnixNano = null,
         ?int $statusCode = null,
-        string $statusMessage = "",
+        string $statusMessage = '',
         array $attrs = [],
     ): array {
-        $trace = ($traceId !== null && strlen($traceId) === 32) ? $traceId : Context::randomHex(16);
-        $span = ($spanId !== null && strlen($spanId) === 16) ? $spanId : Context::randomHex(8);
-        $start = $startUnixNano ?? Otlp::nowUnixNano();
-        $end = $endUnixNano ?? Otlp::nowUnixNano();
-        $name = $this->truncate($name, 32768);
-        foreach ($attrs as $k => $v) {
-            if (is_string($v)) {
-                $attrs[$k] = $this->truncate($v, 4096);
-            }
-        }
-        $this->enqueue("/otlp/v1/traces", Otlp::spanPayload($this->cfg, $name, $trace, $span, $start, $end, $statusCode, $statusMessage, $attrs));
-        return ["trace_id" => $trace, "span_id" => $span];
-    }
+        $tracer = $this->otel->getTracerProvider()->getTracer('obtrace-sdk-php', '1.0.0');
+        $spanBuilder = $tracer->spanBuilder($name)->setSpanKind(SpanKind::KIND_CLIENT);
 
-    public function injectPropagation(array $headers = [], ?string $traceId = null, ?string $spanId = null, ?string $sessionId = null): array
-    {
-        return Context::ensurePropagationHeaders($headers, $traceId, $spanId, $sessionId);
-    }
-
-    public function flush(): void
-    {
-        $now = microtime(true);
-        if ($now < $this->circuitOpenUntil) {
-            return;
+        if (!empty($attrs)) {
+            $spanBuilder->setAttributes($attrs);
         }
-        $halfOpen = $this->circuitFailures >= 5;
-        if ($halfOpen) {
-            if (count($this->queue) === 0) {
-                return;
-            }
-            $batch = [array_shift($this->queue)];
+
+        $span = $spanBuilder->startSpan();
+
+        if ($statusCode !== null && $statusCode >= 400) {
+            $span->setStatus(StatusCode::STATUS_ERROR, $statusMessage);
         } else {
-            $batch = $this->queue;
-            $this->queue = [];
+            $span->setStatus(StatusCode::STATUS_OK, $statusMessage);
         }
-        foreach ($batch as $item) {
-            $success = $this->send($item["endpoint"], $item["payload"]);
-            if ($success) {
-                if ($this->circuitFailures > 0) {
-                    if ($this->cfg->debug) {
-                        fwrite(STDERR, "[obtrace-sdk-php] circuit breaker closed\n");
-                    }
-                    $this->circuitFailures = 0;
-                    $this->circuitOpenUntil = 0;
-                }
-            } else {
-                $this->circuitFailures++;
-                if ($this->circuitFailures >= 5) {
-                    $this->circuitOpenUntil = microtime(true) + 30.0;
-                    if ($this->cfg->debug) {
-                        fwrite(STDERR, "[obtrace-sdk-php] circuit breaker opened\n");
-                    }
-                    break;
-                }
-            }
-        }
+
+        $span->end();
+
+        $spanContext = $span->getContext();
+        return [
+            'trace_id' => $spanContext->getTraceId(),
+            'span_id' => $spanContext->getSpanId(),
+        ];
     }
 
     public function shutdown(): void
     {
-        $this->flush();
+        $this->otel->shutdown();
     }
 
-    private function enqueue(string $endpoint, array $payload): void
+    public function getTracerProvider(): \OpenTelemetry\SDK\Trace\TracerProvider
     {
-        if (count($this->queue) >= $this->cfg->maxQueueSize) {
-            if ($this->cfg->debug) {
-                fwrite(STDERR, sprintf("[obtrace-sdk-php] queue full (%d), dropping oldest item\n", $this->cfg->maxQueueSize));
-            }
-            array_shift($this->queue);
-        }
-        $this->queue[] = ["endpoint" => $endpoint, "payload" => $payload];
-    }
-
-    private function send(string $endpoint, array $payload): bool
-    {
-        if (!function_exists("curl_init")) {
-            return false;
-        }
-
-        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            if ($this->cfg->debug) {
-                fwrite(STDERR, sprintf("[obtrace-sdk-php] json_encode failed endpoint=%s err=%s\n", $endpoint, json_last_error_msg()));
-            }
-            return false;
-        }
-
-        $url = rtrim($this->cfg->ingestBaseUrl, "/") . $endpoint;
-        $ch = curl_init($url);
-        if ($ch === false) {
-            return false;
-        }
-
-        $headers = array_merge(
-            [
-                "Authorization: Bearer " . $this->cfg->apiKey,
-                "Content-Type: application/json",
-            ],
-            array_map(
-                static fn (string $k, mixed $v): string => $k . ": " . (string) $v,
-                array_keys($this->cfg->defaultHeaders),
-                array_values($this->cfg->defaultHeaders),
-            ),
-        );
-
-        $timeoutMs = (int) floor($this->cfg->requestTimeoutSec * 1000);
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => $json,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT_MS => $timeoutMs,
-            CURLOPT_CONNECTTIMEOUT_MS => (int) floor($timeoutMs / 2),
-        ]);
-
-        $body = curl_exec($ch);
-        if ($body === false) {
-            if ($this->cfg->debug) {
-                fwrite(STDERR, sprintf("[obtrace-sdk-php] curl_exec failed endpoint=%s err=%s, retrying\n", $endpoint, curl_error($ch)));
-            }
-            usleep(500000);
-            $body = curl_exec($ch);
-            if ($body === false) {
-                if ($this->cfg->debug) {
-                    fwrite(STDERR, sprintf("[obtrace-sdk-php] curl_exec retry failed endpoint=%s err=%s\n", $endpoint, curl_error($ch)));
-                }
-                curl_close($ch);
-                return false;
-            }
-        }
-
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($code >= 300) {
-            if ($this->cfg->debug) {
-                fwrite(STDERR, sprintf("[obtrace-sdk-php] status=%d endpoint=%s body=%s\n", $code, $endpoint, (string) $body));
-            }
-            return false;
-        }
-        return true;
+        return $this->otel->getTracerProvider();
     }
 }

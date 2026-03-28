@@ -14,13 +14,10 @@ final class ObtraceConfig
         public ?string $projectId = null,
         public ?string $appId = null,
         public ?string $env = null,
-        public string $serviceVersion = "1.0.0",
-        public int $maxQueueSize = 1000,
-        public float $requestTimeoutSec = 5.0,
+        public string $serviceVersion = '1.0.0',
         public array $defaultHeaders = [],
         public bool $validateSemanticMetrics = false,
         public bool $debug = false,
-        public bool $autoInstrumentHttp = true,
     ) {
     }
 }
