@@ -13,9 +13,10 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+      - run: composer install --no-interaction
       - run: php -l src/ObtraceClient.php
-      - run: php -l src/Context.php
-      - run: php -l src/Otlp.php
+      - run: php -l src/OtelSetup.php
       - run: php -l src/Types.php
       - run: php -l src/Framework.php
-      - run: php tests/context_test.php
+      - run: php -l src/SemanticMetrics.php
+      - run: php vendor/bin/phpunit tests/
