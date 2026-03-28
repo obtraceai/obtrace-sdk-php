@@ -18,11 +18,46 @@ SDK is thin/dumb.
 composer require obtrace/sdk-php
 ```
 
-Current workspace usage:
+### Auto-Instrumentation Setup
 
-```php
-require_once __DIR__ . "/src/ObtraceClient.php";
+For full auto-instrumentation (automatic tracing of HTTP requests, database queries, framework operations), install the `ext-opentelemetry` PHP extension:
+
+```bash
+pecl install opentelemetry
 ```
+
+Add to your `php.ini`:
+
+```ini
+extension=opentelemetry
+```
+
+Then install auto-instrumentation packages for the libraries you use:
+
+```bash
+composer require open-telemetry/contrib-auto-guzzle      # Guzzle HTTP
+composer require open-telemetry/contrib-auto-pdo          # PDO databases
+composer require open-telemetry/contrib-auto-laravel      # Laravel
+composer require open-telemetry/contrib-auto-symfony      # Symfony
+composer require open-telemetry/contrib-auto-slim         # Slim
+```
+
+Set these environment variables to enable auto-instrumentation:
+
+```bash
+OTEL_PHP_AUTOLOAD_ENABLED=true
+OTEL_SERVICE_NAME=your-service
+OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.obtrace.io
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer obt_live_..."
+```
+
+Run the built-in setup checker to see what's installed and what's missing:
+
+```bash
+composer obtrace:check
+```
+
+The SDK will also log suggestions at startup when it detects libraries that could benefit from auto-instrumentation packages.
 
 ## Configuration
 

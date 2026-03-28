@@ -24,7 +24,8 @@
     "phpunit/phpunit": "^11.0"
   },
   "scripts": {
-    "test": "phpunit --testdox"
+    "test": "phpunit --testdox",
+    "obtrace:check": "php -r \"require_once 'vendor/autoload.php'; Obtrace\\Sdk\\ObtraceClient::printSetupInstructions();\""
   },
   "extra": {
     "laravel": {

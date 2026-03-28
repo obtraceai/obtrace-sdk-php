@@ -32,15 +32,96 @@ final class ObtraceClient
         'fatal' => 21,
     ];
 
+    private const AUTO_INSTRUMENTATION_MAP = [
+        'guzzlehttp/guzzle' => 'open-telemetry/contrib-auto-guzzle',
+        'ext-pdo' => 'open-telemetry/contrib-auto-pdo',
+        'laravel/framework' => 'open-telemetry/contrib-auto-laravel',
+        'symfony/http-kernel' => 'open-telemetry/contrib-auto-symfony',
+        'slim/slim' => 'open-telemetry/contrib-auto-slim',
+    ];
+
     public function __construct(private readonly ObtraceConfig $cfg)
     {
         if ($cfg->apiKey === '' || $cfg->ingestBaseUrl === '' || $cfg->serviceName === '') {
             throw new \InvalidArgumentException('apiKey, ingestBaseUrl and serviceName are required');
         }
         $this->otel = new OtelSetup($cfg);
+        $this->detectMissingInstrumentation();
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
         $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
+    }
+
+    private function detectMissingInstrumentation(): void
+    {
+        foreach (self::AUTO_INSTRUMENTATION_MAP as $library => $instrumentation) {
+            if ($this->isPackageInstalled($library) && !$this->isPackageInstalled($instrumentation)) {
+                fwrite(STDERR, sprintf(
+                    "[obtrace] %s is installed but %s is not. Run: composer require %s\n",
+                    $library,
+                    $instrumentation,
+                    $instrumentation,
+                ));
+            }
+        }
+    }
+
+    private function isPackageInstalled(string $package): bool
+    {
+        if (str_starts_with($package, 'ext-')) {
+            return extension_loaded(substr($package, 4));
+        }
+        $installed = __DIR__ . '/../vendor/composer/installed.json';
+        if (!file_exists($installed)) {
+            return false;
+        }
+        static $installedPackages = null;
+        if ($installedPackages === null) {
+            $data = json_decode(file_get_contents($installed), true);
+            $packages = $data['packages'] ?? $data;
+            $installedPackages = [];
+            foreach ($packages as $pkg) {
+                $installedPackages[$pkg['name'] ?? ''] = true;
+            }
+        }
+        return isset($installedPackages[$package]);
+    }
+
+    public static function printSetupInstructions(): void
+    {
+        $extLoaded = extension_loaded('opentelemetry');
+        $lines = [
+            '',
+            '=== Obtrace PHP SDK - Setup Instructions ===',
+            '',
+            '1. Install the ext-opentelemetry PHP extension for auto-instrumentation:',
+            '',
+            '   pecl install opentelemetry',
+            '',
+            '   Then add to your php.ini:',
+            '',
+            '   extension=opentelemetry',
+            '',
+            '   Current status: ' . ($extLoaded ? 'INSTALLED' : 'NOT INSTALLED'),
+            '',
+            '2. Install auto-instrumentation packages for your libraries:',
+            '',
+        ];
+        foreach (self::AUTO_INSTRUMENTATION_MAP as $library => $instrumentation) {
+            $lines[] = sprintf('   composer require %s  # auto-instrument %s', $instrumentation, $library);
+        }
+        $lines[] = '';
+        $lines[] = '3. Set environment variables:';
+        $lines[] = '';
+        $lines[] = '   OTEL_PHP_AUTOLOAD_ENABLED=true';
+        $lines[] = '   OTEL_SERVICE_NAME=your-service';
+        $lines[] = '   OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.obtrace.io';
+        $lines[] = '   OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer obt_live_..."';
+        $lines[] = '';
+        $lines[] = '   With ext-opentelemetry and these packages, HTTP requests, database';
+        $lines[] = '   queries, and framework operations are traced automatically.';
+        $lines[] = '';
+        fwrite(STDOUT, implode("\n", $lines) . "\n");
     }
 
     public function handleError(int $errno, string $errstr, string $errfile = '', int $errline = 0): bool
