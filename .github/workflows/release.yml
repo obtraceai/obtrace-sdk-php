@@ -58,7 +58,13 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ needs.auto-tag.outputs.tag || github.ref_name }}" --generate-notes
+        run: |
+          TAG="${{ needs.auto-tag.outputs.tag || github.ref_name }}"
+          curl -sf -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            -d "{\"tag_name\":\"$TAG\",\"generate_release_notes\":true}"
       - name: Notify Packagist
         run: |
           curl -s -X POST "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_API_TOKEN }}" \
