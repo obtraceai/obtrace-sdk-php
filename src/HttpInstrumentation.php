@@ -64,6 +64,19 @@ final class HttpInstrumentation
         return $result;
     }
 
+    public static function getGuzzleClient(array $config = []): object
+    {
+        if (!class_exists('GuzzleHttp\Client')) {
+            throw new \RuntimeException('guzzlehttp/guzzle is required: composer require guzzlehttp/guzzle');
+        }
+
+        $stack = \GuzzleHttp\HandlerStack::create();
+        $stack->push(self::guzzleMiddleware(), 'obtrace');
+        $config['handler'] = $stack;
+
+        return new \GuzzleHttp\Client($config);
+    }
+
     public static function guzzleMiddleware(): callable
     {
         return static function (callable $handler): callable {
