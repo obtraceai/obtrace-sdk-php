@@ -14,6 +14,9 @@ final class ObtraceClient
     private OtelSetup $otel;
     private mixed $previousErrorHandler = null;
     private mixed $previousExceptionHandler = null;
+    private bool $initialized = false;
+
+    public function isInitialized(): bool { return $this->initialized; }
 
     private const ERROR_LEVEL_MAP = [
         E_NOTICE => 'info',
@@ -55,6 +58,49 @@ final class ObtraceClient
         register_shutdown_function([$this, 'shutdown']);
         $this->previousErrorHandler = set_error_handler([$this, 'handleError']);
         $this->previousExceptionHandler = set_exception_handler([$this, 'handleException']);
+        $this->handshake();
+    }
+
+    private function handshake(): void
+    {
+        $base = rtrim($this->cfg->ingestBaseUrl, '/');
+        if ($base === '') return;
+        try {
+            $payload = json_encode([
+                'sdk' => 'obtrace-sdk-php',
+                'sdk_version' => '1.0.0',
+                'service_name' => $this->cfg->serviceName,
+                'service_version' => $this->cfg->serviceVersion,
+                'runtime' => 'php',
+                'runtime_version' => PHP_VERSION,
+            ]);
+            $ctx = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$this->cfg->apiKey}\r\n",
+                    'content' => $payload,
+                    'timeout' => 5,
+                    'ignore_errors' => true,
+                ],
+            ]);
+            $result = @file_get_contents("{$base}/v1/init", false, $ctx);
+            if ($result !== false) {
+                $status = 0;
+                foreach ($http_response_header ?? [] as $header) {
+                    if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $m)) {
+                        $status = (int) $m[1];
+                    }
+                }
+                if ($status === 200) {
+                    $this->initialized = true;
+                    if ($this->cfg->debug) fwrite(STDERR, "[obtrace-sdk-php] init handshake OK\n");
+                } elseif ($this->cfg->debug) {
+                    fwrite(STDERR, "[obtrace-sdk-php] init handshake failed: {$status}\n");
+                }
+            }
+        } catch (\Throwable $e) {
+            if ($this->cfg->debug) fwrite(STDERR, "[obtrace-sdk-php] init handshake error: {$e->getMessage()}\n");
+        }
     }
 
     public function detectMissingInstrumentation(): void
