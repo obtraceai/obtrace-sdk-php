@@ -63,10 +63,10 @@ The SDK will also log suggestions at startup when it detects libraries that coul
 
 Required:
 - `apiKey`
-- `ingestBaseUrl`
 - `serviceName`
 
 Optional (auto-resolved from API key on the server side):
+- `ingestBaseUrl` (defaults to `https://ingest.obtrace.ai`)
 - `tenantId`
 - `projectId`
 - `appId`
@@ -77,7 +77,7 @@ Optional (auto-resolved from API key on the server side):
 
 ### Simplified setup
 
-The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only three fields are needed:
+The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only two fields are needed:
 
 ```php
 <?php
@@ -86,7 +86,6 @@ use Obtrace\Sdk\ObtraceConfig;
 
 $cfg = new ObtraceConfig(
     apiKey: "obt_live_...",
-    ingestBaseUrl: "https://ingest.obtrace.io",
     serviceName: "my-service"
 );
 
@@ -109,7 +108,6 @@ use Obtrace\Sdk\SemanticMetrics;
 
 $cfg = new ObtraceConfig(
     apiKey: "<API_KEY>",
-    ingestBaseUrl: "https://inject.obtrace.ai",
     serviceName: "php-api"
 );
 

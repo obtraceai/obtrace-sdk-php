@@ -8,8 +8,8 @@ final class ObtraceConfig
 {
     public function __construct(
         public string $apiKey,
-        public string $ingestBaseUrl,
         public string $serviceName,
+        public string $ingestBaseUrl = 'https://ingest.obtrace.ai',
         public ?string $tenantId = null,
         public ?string $projectId = null,
         public ?string $appId = null,

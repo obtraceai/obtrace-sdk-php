@@ -16,8 +16,8 @@ class ObtraceServiceProvider extends ServiceProvider
             $config = $app['config']->get('obtrace', []);
             return new ObtraceClient(new ObtraceConfig(
                 apiKey: $config['api_key'] ?? '',
-                ingestBaseUrl: $config['ingest_base_url'] ?? '',
                 serviceName: $config['service_name'] ?? $app['config']->get('app.name', 'laravel'),
+                ingestBaseUrl: $config['ingest_base_url'] ?? 'https://ingest.obtrace.ai',
                 tenantId: $config['tenant_id'] ?? null,
                 projectId: $config['project_id'] ?? null,
                 appId: $config['app_id'] ?? null,

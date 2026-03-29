@@ -50,8 +50,8 @@ final class ObtraceClient
             fwrite(STDERR, "[obtrace-sdk-php] already initialized, skipping duplicate init\n");
             return;
         }
-        if ($cfg->apiKey === '' || $cfg->ingestBaseUrl === '' || $cfg->serviceName === '') {
-            throw new \InvalidArgumentException('apiKey, ingestBaseUrl and serviceName are required');
+        if ($cfg->apiKey === '' || $cfg->serviceName === '') {
+            throw new \InvalidArgumentException('apiKey and serviceName are required');
         }
         self::$initialized = true;
         $this->otel = new OtelSetup($cfg);

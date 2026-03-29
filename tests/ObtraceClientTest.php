@@ -14,8 +14,8 @@ final class ObtraceClientTest extends TestCase
     {
         return new ObtraceConfig(
             apiKey: $overrides['apiKey'] ?? 'test-key',
-            ingestBaseUrl: $overrides['ingestBaseUrl'] ?? 'https://ingest.test',
             serviceName: $overrides['serviceName'] ?? 'test-svc',
+            ingestBaseUrl: $overrides['ingestBaseUrl'] ?? 'https://ingest.test',
         );
     }
 
@@ -29,12 +29,6 @@ final class ObtraceClientTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         new ObtraceClient($this->makeConfig(['apiKey' => '']));
-    }
-
-    public function testConstructorRequiresIngestBaseUrl(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        new ObtraceClient($this->makeConfig(['ingestBaseUrl' => '']));
     }
 
     public function testConstructorRequiresServiceName(): void
