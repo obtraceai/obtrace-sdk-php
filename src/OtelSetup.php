@@ -16,6 +16,7 @@ use OpenTelemetry\SDK\Metrics\MetricReader\ExportingReader;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
 use OpenTelemetry\SDK\Trace\TracerProvider;
+use OpenTelemetry\API\Trace\Propagation\TraceContextPropagator;
 use OpenTelemetry\SemConv\ResourceAttributes;
 
 final class OtelSetup
@@ -78,6 +79,10 @@ final class OtelSetup
             ->addReader(new ExportingReader($metricExporter))
             ->setResource($resource)
             ->build();
+
+        \OpenTelemetry\API\Globals::registerInitializer(function () {
+            return TraceContextPropagator::getInstance();
+        });
     }
 
     public function getTracerProvider(): TracerProvider
