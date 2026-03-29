@@ -68,7 +68,7 @@ final class ObtraceClient
         try {
             $payload = json_encode([
                 'sdk' => 'obtrace-sdk-php',
-                'sdk_version' => '1.0.0',
+                'sdk_version' => '2.0.0',
                 'service_name' => $this->cfg->serviceName,
                 'service_version' => $this->cfg->serviceVersion,
                 'runtime' => 'php',
@@ -215,7 +215,7 @@ final class ObtraceClient
 
     public function log(string $level, string $message, array $context = []): void
     {
-        $logger = $this->otel->getLoggerProvider()->getLogger('obtrace-sdk-php', '1.0.0');
+        $logger = $this->otel->getLoggerProvider()->getLogger('obtrace-sdk-php', '2.0.0');
         $record = (new LogRecord($message))
             ->setSeverityText(strtoupper($level))
             ->setSeverityNumber(self::SEVERITY_MAP[$level] ?? 9)
@@ -228,7 +228,7 @@ final class ObtraceClient
         if ($this->cfg->validateSemanticMetrics && $this->cfg->debug && !SemanticMetrics::isSemanticMetric($name)) {
             fwrite(STDERR, sprintf("[obtrace-sdk-php] non-canonical metric name: %s\n", $name));
         }
-        $meter = $this->otel->getMeterProvider()->getMeter('obtrace-sdk-php', '1.0.0');
+        $meter = $this->otel->getMeterProvider()->getMeter('obtrace-sdk-php', '2.0.0');
         $gauge = $meter->createObservableGauge($name, $unit);
         $gauge->observe(static function ($observer) use ($value, $context) {
             $observer->observe($value, $context);
@@ -242,7 +242,7 @@ final class ObtraceClient
         string $statusMessage = '',
         array $attrs = [],
     ): array {
-        $tracer = $this->otel->getTracerProvider()->getTracer('obtrace-sdk-php', '1.0.0');
+        $tracer = $this->otel->getTracerProvider()->getTracer('obtrace-sdk-php', '2.0.0');
         $spanBuilder = $tracer->spanBuilder($name)->setSpanKind(SpanKind::KIND_CLIENT);
 
         if (!empty($attrs)) {

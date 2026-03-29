@@ -2,7 +2,7 @@
   "name": "obtrace/sdk",
   "description": "Obtrace PHP SDK",
   "type": "library",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "license": "MIT",
   "autoload": {
     "psr-4": {
