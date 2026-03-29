@@ -179,7 +179,7 @@ final class ObtraceClient
         $lines[] = '';
         $lines[] = '   OTEL_PHP_AUTOLOAD_ENABLED=true';
         $lines[] = '   OTEL_SERVICE_NAME=your-service';
-        $lines[] = '   OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.obtrace.io';
+        $lines[] = '   OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.obtrace.ai';
         $lines[] = '   OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer obt_live_..."';
         $lines[] = '';
         $lines[] = '   With ext-opentelemetry and these packages, HTTP requests, database';
